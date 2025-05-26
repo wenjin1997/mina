@@ -39,8 +39,8 @@
   mina_runtime_config
   mina_signature_kind
   mina_stdlib
+  mina_stdlib_unix
   mina_transaction
-  mina_wire_types
   network_pool
   participating_state
   pickles
