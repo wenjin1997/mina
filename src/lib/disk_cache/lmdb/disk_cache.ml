@@ -47,17 +47,24 @@ module Make (Data : Binable.S) = struct
     Rw.get ~env db idx |> Option.value_exn
 
   let put ({ env; db; counter; logger; garbage } : t) (x : Data.t) : id =
-    (* TODO: we may reuse IDs by pulling them from the `garbage` hash set *)
-    let idx = !counter in
-    incr counter ;
+    let idx =
+      match Hash_set.find garbage ~f:(const true) with
+      | None ->
+          incr counter ; !counter - 1
+      | Some reused_id ->
+          [%log debug] "Reusing LMDB key %d for a new KV pair" reused_id
+            ~metadata:[ ("index", `Int reused_id) ] ;
+          Hash_set.remove garbage reused_id ;
+          reused_id
+    in
     let res = { idx } in
-    (* When this reference is GC'd, delete the file. *)
     Gc.Expert.add_finalizer_last_exn res (fun () ->
         [%log debug] "Data at %d is GCed, marking as garbage" idx
           ~metadata:[ ("index", `Int idx) ] ;
         Hash_set.add garbage idx ) ;
     if Hash_set.length garbage >= garbage_size_limit then (
       Hash_set.iter garbage ~f:(fun to_remove ->
+          (* When this reference is GC'd, delete the file. *)
           [%log debug] "Instructing LMDB to remove garbage at index %d"
             to_remove
             ~metadata:[ ("index", `Int to_remove) ] ;
