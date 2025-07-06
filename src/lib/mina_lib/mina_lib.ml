@@ -1694,7 +1694,12 @@ let initialize_zkapp_vk_cache_db (config : Config.t) =
   >>| function Error e -> raise_on_initialization_error e | Ok db -> db
 
 let create ~commit_id ?wallets (config : Config.t) =
-  let commit_id_short = String.sub ~pos:0 ~len:8 commit_id in
+  let commit_id_short =
+    (* Shorten the commit ID to 8 characters for logging purposes *)
+    let max_short_commit_id_length = 8 in
+    if String.length commit_id <= max_short_commit_id_length then commit_id
+    else String.sub ~pos:0 ~len:max_short_commit_id_length commit_id
+  in
   let constraint_constants = config.precomputed_values.constraint_constants in
   let consensus_constants = config.precomputed_values.consensus_constants in
   let block_window_duration = config.compile_config.block_window_duration in
