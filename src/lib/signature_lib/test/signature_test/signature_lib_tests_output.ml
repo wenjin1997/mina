@@ -14,20 +14,33 @@ let%test_module "Signatures are unchanged test" =
       )
 
     let%test "signature of empty random oracle input matches" =
+    Printf.printf "开始测试：signature of empty random oracle input matches\n%!";
+    let start_time = Unix.gettimeofday () in
       let signature_got =
         Schnorr.Legacy.sign privkey
           (Random_oracle_input.Legacy.field_elements [||])
       in
-      Snark_params.Tick.Field.equal (fst signature_expected) (fst signature_got)
-      && Snark_params.Tock.Field.equal (snd signature_expected)
-           (snd signature_got)
+      let end_time = Unix.gettimeofday () in
+      Printf.printf "签名耗时: %f 秒\n%!" (end_time -. start_time);
+      
+      let is_valid =
+        Snark_params.Tick.Field.equal (fst signature_expected) (fst signature_got)
+        && Snark_params.Tock.Field.equal (snd signature_expected) (snd signature_got)
+      in
+      Printf.printf "签名验证结果: %b\n%!" is_valid;
+      Printf.printf "验证耗时: %f 秒\n%!" (end_time -. start_time);
+      is_valid
 
     let%test "signature of signature matches" =
+    Printf.printf "开始测试：signature of signature matches\n%!";
+    let start_time = Unix.gettimeofday () in
       let signature_got =
         Schnorr.Legacy.sign privkey
           (Random_oracle_input.Legacy.field_elements
              [| fst signature_expected |] )
       in
+      let end_time = Unix.gettimeofday () in
+      Printf.printf "签名耗时: %f 秒\n%!" (end_time -. start_time);
       let signature_expected =
         ( Snark_params.Tick.Field.of_string
             "7379148532947400206038414977119655575287747480082205647969258483647762101030"
@@ -35,7 +48,12 @@ let%test_module "Signatures are unchanged test" =
             "26901815964642131149392134713980873704065643302140817442239336405283236628658"
         )
       in
-      Snark_params.Tick.Field.equal (fst signature_expected) (fst signature_got)
-      && Snark_params.Tock.Field.equal (snd signature_expected)
-           (snd signature_got)
+      let verify_start_time = Unix.gettimeofday () in
+      let is_valid =
+        Snark_params.Tick.Field.equal (fst signature_expected) (fst signature_got)
+        && Snark_params.Tock.Field.equal (snd signature_expected) (snd signature_got)
+      in
+      let verify_end_time = Unix.gettimeofday () in
+      Printf.printf "验证签名耗时: %f 秒\n%!" (verify_end_time -. verify_start_time);
+      is_valid
   end )
