@@ -14,20 +14,28 @@ let%test_module "Signatures are unchanged test" =
       )
 
     let%test "signature of empty random oracle input matches" =
+    Printf.printf "开始测试：signature of empty random oracle input matches\n%!";
+    let start_time = Unix.gettimeofday () in
       let signature_got =
         Schnorr.Legacy.sign privkey
           (Random_oracle_input.Legacy.field_elements [||])
       in
+      let end_time = Unix.gettimeofday () in
+      Printf.printf "签名耗时: %f 秒\n%!" (end_time -. start_time);
       Snark_params.Tick.Field.equal (fst signature_expected) (fst signature_got)
       && Snark_params.Tock.Field.equal (snd signature_expected)
            (snd signature_got)
 
     let%test "signature of signature matches" =
+    Printf.printf "开始测试：signature of signature matches\n%!";
+    let start_time = Unix.gettimeofday () in
       let signature_got =
         Schnorr.Legacy.sign privkey
           (Random_oracle_input.Legacy.field_elements
              [| fst signature_expected |] )
       in
+      let end_time = Unix.gettimeofday () in
+      Printf.printf "签名耗时: %f 秒\n%!" (end_time -. start_time);
       let signature_expected =
         ( Snark_params.Tick.Field.of_string
             "7379148532947400206038414977119655575287747480082205647969258483647762101030"
