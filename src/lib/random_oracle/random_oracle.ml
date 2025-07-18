@@ -1,5 +1,7 @@
 open Core_kernel
+open Async
 open Pickles.Impls.Step.Internal_Basic
+open Pickles_types
 
 module State = struct
   include Array
@@ -118,9 +120,84 @@ let%test_unit "sponge checked-unchecked" =
   T.Test.test_equal ~equal:T.Field.equal ~sexp_of_t:T.Field.sexp_of_t
     T.Typ.(field * field)
     T.Typ.field
-    (fun (x, y) -> make_checked (fun () -> Checked.hash [| x; y |]))
-    (fun (x, y) -> hash [| x; y |])
+    (fun (x, y) ->
+      let t1 = Core_kernel.Time.now () in
+      let res = make_checked (fun () -> Checked.hash [| x; y |]) in
+      let t2 = Core_kernel.Time.now () in
+      Async.printf "make_checked 执行耗时: %s\n%!" (Core_kernel.Time.Span.to_string (Core_kernel.Time.diff t2 t1));
+      res
+    )
+    (fun (x, y) ->
+      let t1 = Core_kernel.Time.now () in
+      let res = hash [| x; y |] in
+      let t2 = Core_kernel.Time.now () in
+      Async.printf "hash 执行耗时: %s\n%!" (Core_kernel.Time.Span.to_string (Core_kernel.Time.diff t2 t1));
+      res
+    )
     (x, y)
+
+let%test_unit "proof generation test" =
+  let open Pickles.Impls.Step in
+  let module T = Internal_Basic in
+  
+  (* 编译包含 Random Oracle 的电路 *)
+  let _tag, _cache_handle, proof, Pickles.Provers.[ prove ] =
+    Pickles.compile 
+      ~public_input:(Pickles.Inductive_rule.Input Typ.unit)
+      ~auxiliary_typ:Typ.unit
+      ~branches:(module Nat.N1)
+      ~max_proofs_verified:(module Nat.N0)
+      ~name:"random_oracle_proof_test"
+      ~choices:(fun ~self:_ ->
+        [ { identifier = "random_oracle_hash_proof"
+          ; prevs = []
+          ; main =
+              (fun _ ->
+                let x = exists Field.typ ~compute:(fun () -> T.Field.random ()) in
+                let y = exists Field.typ ~compute:(fun () -> T.Field.random ()) in
+                
+                let _hash_result = 
+                  make_checked (fun () -> 
+                    Checked.hash [| x; y |]
+                  ) 
+                in
+                
+                { previous_proof_statements = []
+                ; public_output = ()
+                ; auxiliary_output = ()
+                } )
+          ; feature_flags = Pickles_types.Plonk_types.Features.none_bool
+          }
+        ] )
+      ()
+  in
+  
+  let module Proof = (val proof) in
+  
+  (* 测试证明生成时间 *)
+  let prove_start_time = Time.now () in
+  let public_input, (), proof =
+    Async.Thread_safe.block_on_async_exn (fun () -> prove ())
+  in
+  let prove_end_time = Time.now () in
+  let prove_duration = Time.diff prove_end_time prove_start_time in
+  
+  (* 计算证明大小 *)
+  let proof_size_words = Obj.reachable_words (Obj.repr proof) in
+  let proof_size_bytes = proof_size_words * (Sys.word_size / 8) in
+  
+  (* 测试证明验证时间 *)
+  let verify_start_time = Time.now () in
+  Or_error.ok_exn
+    (Async.Thread_safe.block_on_async_exn (fun () ->
+          Proof.verify [ (public_input, proof) ] ) ) ;
+  let verify_end_time = Time.now () in
+  let verify_duration = Time.diff verify_end_time verify_start_time in
+  
+  (* 输出结果 *)
+  Async.printf "证明生成时间: %s\n" (Time.Span.to_string prove_duration) ;
+  Async.printf "证明大小: %d 字节\n" proof_size_bytes ;
+  Async.printf "证明验证时间: %s\n" (Time.Span.to_string verify_duration) ;    
 
 module Legacy = struct
   module Input = Random_oracle_input.Legacy
